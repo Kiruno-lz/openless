@@ -33,6 +33,8 @@ final class DictationCoordinator {
     private var asr: VolcengineStreamingASR?
     private var audioConsumer: BufferingAudioConsumer?
     private var sessionStartedAt: Date = Date()
+    /// hold 模式下，Esc 取消后下一次 .released 应被忽略（否则会再次触发结束流程）。
+    private var suppressNextRelease = false
 
     /// 启动时一次性读 Keychain 缓存的凭据快照；会话热路径只读这里，
     /// 不再每次都打 SecItemCopyMatching 触发钥匙串弹窗。
@@ -138,8 +140,10 @@ final class DictationCoordinator {
             guard let self else { return }
             for await event in self.hotkey.events {
                 switch event {
-                case .toggled:
-                    self.handleToggle()
+                case .pressed:
+                    self.handlePressed()
+                case .released:
+                    self.handleReleased()
                 case .cancelled:
                     self.handleCancel()
                 }
@@ -147,7 +151,46 @@ final class DictationCoordinator {
         }
     }
 
-    // MARK: - Toggle 状态机
+    // MARK: - Toggle / Hold 状态机
+
+    private func handlePressed() {
+        switch UserPreferences.shared.hotkeyMode {
+        case .toggle:
+            handleToggle()
+        case .hold:
+            handleHoldStart()
+        }
+    }
+
+    private func handleReleased() {
+        guard UserPreferences.shared.hotkeyMode == .hold else { return }
+        if suppressNextRelease {
+            suppressNextRelease = false
+            return
+        }
+        switch sessionPhase {
+        case .listening:
+            sessionPhase = .processing
+            Task { await endSession() }
+        case .starting:
+            // 用户没等到 ASR 连上就松手 — 当作取消，不发送任何已采集音频。
+            Log.write("[session] hold: starting 阶段松手，取消")
+            handleCancel()
+        case .idle, .processing:
+            return
+        }
+    }
+
+    private func handleHoldStart() {
+        switch sessionPhase {
+        case .idle:
+            sessionPhase = .starting
+            Task { await beginSession() }
+        case .starting, .listening, .processing:
+            // hold 模式下重复 .pressed 通常来自系统自动重发；忽略即可。
+            return
+        }
+    }
 
     private func handleToggle() {
         switch sessionPhase {
@@ -173,6 +216,10 @@ final class DictationCoordinator {
         recorder.stop()
         audioConsumer?.clear()
         audioConsumer = nil
+        // hold 模式：如果用户还按着键，松手时会再来一次 .released —— 屏蔽掉，避免再次触发结束。
+        if UserPreferences.shared.hotkeyMode == .hold {
+            suppressNextRelease = true
+        }
         capsule.update(state: .cancelled)
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) { [weak self] in
             self?.capsule.update(state: .hidden)

@@ -959,6 +959,7 @@ private struct SettingsHubTab: View {
     @State private var arkModelId = ArkCredentials.defaultModelId
     @State private var arkEndpoint = ArkCredentials.defaultEndpoint.absoluteString
     @State private var trigger: HotkeyBinding.Trigger = UserPreferences.shared.hotkeyTrigger
+    @State private var hotkeyMode: HotkeyMode = UserPreferences.shared.hotkeyMode
     @State private var mode: PolishMode = UserPreferences.shared.polishMode
     @State private var hasAccessibility = false
     @State private var hasMicrophone = false
@@ -1020,6 +1021,26 @@ private struct SettingsHubTab: View {
                         NotificationCenter.default.post(name: .openLessHotkeyChanged, object: nil)
                     }
                 }
+                DividerLine()
+                SettingsRow(title: "录音方式") {
+                    Picker("录音方式", selection: $hotkeyMode) {
+                        ForEach(HotkeyMode.allCases, id: \.self) { item in
+                            Text(item.displayName).tag(item)
+                        }
+                    }
+                    .labelsHidden()
+                    .pickerStyle(.segmented)
+                    .frame(width: 220, alignment: .leading)
+                    .onChange(of: hotkeyMode) { _, newValue in
+                        UserPreferences.shared.hotkeyMode = newValue
+                        NotificationCenter.default.post(name: .openLessHotkeyChanged, object: nil)
+                    }
+                }
+                DividerLine()
+                Text(hotkeyMode.hint)
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+                    .padding(.top, 4)
                 DividerLine()
                 SettingsRow(title: "默认模式") {
                     Picker("模式", selection: $mode) {
