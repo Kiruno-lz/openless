@@ -68,7 +68,12 @@ let package = Package(
                 "OpenLessPersistence",
                 .product(name: "Sparkle", package: "Sparkle"),
             ],
-            path: "Sources/OpenLessApp"
+            path: "Sources/OpenLessApp",
+            // 让 dyld 能在 Contents/Frameworks/ 里找到嵌入的 Sparkle.framework。
+            // SPM 默认不给 executable 加这个 rpath，需要显式注入。
+            linkerSettings: [
+                .unsafeFlags(["-Xlinker", "-rpath", "-Xlinker", "@executable_path/../Frameworks"])
+            ]
         ),
         .testTarget(
             name: "OpenLessCoreTests",
