@@ -423,11 +423,12 @@ private struct PasteableCredentialField: View {
     let placeholder: String
     let secure: Bool
     @Binding var text: String
+    @State private var revealed = false
 
     var body: some View {
         HStack(spacing: 8) {
             Group {
-                if secure {
+                if secure && !revealed {
                     SecureField(placeholder, text: $text)
                 } else {
                     TextField(placeholder, text: $text)
@@ -435,6 +436,17 @@ private struct PasteableCredentialField: View {
             }
             .textFieldStyle(.roundedBorder)
             .frame(maxWidth: 390)
+
+            if secure {
+                Button {
+                    revealed.toggle()
+                } label: {
+                    Image(systemName: revealed ? "eye.slash" : "eye")
+                }
+                .buttonStyle(.bordered)
+                .controlSize(.small)
+                .help(revealed ? "隐藏密钥" : "显示密钥")
+            }
 
             Button {
                 if let value = NSPasteboard.general.string(forType: .string) {
