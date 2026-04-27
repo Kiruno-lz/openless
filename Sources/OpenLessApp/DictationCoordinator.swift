@@ -338,6 +338,21 @@ final class DictationCoordinator {
         }
     }
 
+    /// 润色环节实际发生了什么。决定胶囊提示色调和历史记录的真实 mode。
+    private enum PolishOutcome {
+        case ok                       // 真润色完成
+        case skippedNoCredentials     // 没填 Ark，直接跳过
+        case failed(String)           // 调到了，但报错；error 文本仅作日志
+
+        var logTag: String {
+            switch self {
+            case .ok: return "ok"
+            case .skippedNoCredentials: return "skip-no-creds"
+            case .failed(let msg): return "failed(\(msg.prefix(120)))"
+            }
+        }
+    }
+
     private func polishAndInsert(
         raw: RawTranscript,
         originalRawText: String? = nil,
@@ -347,13 +362,14 @@ final class DictationCoordinator {
         let savedRaw = originalRawText ?? raw.text
 
         guard let arkCreds = loadArkCredentials() else {
-            Log.write("缺少 Ark 凭据；直接用 raw 插入")
+            Log.write("[polish] 缺少 Ark 凭据；跳过润色，插入 raw")
             await insertText(
                 text: raw.text,
                 raw: savedRaw,
                 mode: mode,
                 durationMs: raw.durationMs,
-                dictionaryEntryCount: dictionaryEntries.count
+                dictionaryEntryCount: dictionaryEntries.count,
+                polishOutcome: .skippedNoCredentials
             )
             return
         }
@@ -371,20 +387,18 @@ final class DictationCoordinator {
                 raw: savedRaw,
                 mode: mode,
                 durationMs: raw.durationMs,
-                dictionaryEntryCount: dictionaryEntries.count
+                dictionaryEntryCount: dictionaryEntries.count,
+                polishOutcome: .ok
             )
         } catch {
-            Log.write("[polish] 失败: \(error)；fallback 用 raw")
-            // 让用户知道润色失败（最常见原因：Ark 模型 ID 写错）。
-            // 1.5s 提示后用 raw 兜底插入，避免用户以为是"整理完成"。
-            capsule.update(state: .error("整理失败 用原文"))
-            try? await Task.sleep(nanoseconds: 1_500_000_000)
+            Log.write("[polish] 失败: \(error)；插入 raw")
             await insertText(
                 text: raw.text,
                 raw: savedRaw,
                 mode: mode,
                 durationMs: raw.durationMs,
-                dictionaryEntryCount: dictionaryEntries.count
+                dictionaryEntryCount: dictionaryEntries.count,
+                polishOutcome: .failed(String(describing: error))
             )
         }
     }
@@ -394,7 +408,8 @@ final class DictationCoordinator {
         raw: String,
         mode: PolishMode,
         durationMs: Int?,
-        dictionaryEntryCount: Int
+        dictionaryEntryCount: Int,
+        polishOutcome: PolishOutcome = .ok
     ) async {
         let result = await inserter.insert(text)
         let frontApp = NSWorkspace.shared.frontmostApplication
@@ -402,14 +417,20 @@ final class DictationCoordinator {
         if !learned.isEmpty {
             Log.write("[dictionary] 自动学习：\(learned.map { $0.phrase }.joined(separator: ", "))")
         }
+        // 润色没真跑时，历史里的 mode 应反映「实际只是 raw」，避免误导。
+        let savedMode: PolishMode
+        switch polishOutcome {
+        case .ok: savedMode = mode
+        case .skippedNoCredentials, .failed: savedMode = .raw
+        }
         switch result {
         case .inserted:
-            capsule.update(state: .inserted)
-            Log.write("[insert] OK")
+            capsule.update(state: capsuleStateForInsert(polishOutcome))
+            Log.write("[insert] OK (polish=\(polishOutcome.logTag))")
             saveSession(
                 raw: raw,
                 final: text,
-                mode: mode,
+                mode: savedMode,
                 app: frontApp,
                 status: .inserted,
                 errorCode: nil,
@@ -417,12 +438,12 @@ final class DictationCoordinator {
                 dictionaryEntryCount: dictionaryEntryCount
             )
         case .copiedFallback(let reason):
-            capsule.update(state: .copied)
-            Log.write("[insert] fallback: \(reason)")
+            capsule.update(state: capsuleStateForCopy(polishOutcome))
+            Log.write("[insert] fallback: \(reason) (polish=\(polishOutcome.logTag))")
             saveSession(
                 raw: raw,
                 final: text,
-                mode: mode,
+                mode: savedMode,
                 app: frontApp,
                 status: .copiedFallback,
                 errorCode: reason,
@@ -435,6 +456,22 @@ final class DictationCoordinator {
         // - "已插入"也保留较长时间，避免视觉一闪而过
         DispatchQueue.main.asyncAfter(deadline: .now() + 2.5) { [weak self] in
             self?.capsule.update(state: .hidden)
+        }
+    }
+
+    private func capsuleStateForInsert(_ outcome: PolishOutcome) -> CapsuleState {
+        switch outcome {
+        case .ok: return .inserted
+        case .skippedNoCredentials: return .warning("已插入原文 · 未润色")
+        case .failed: return .warning("润色失败 · 已用原文")
+        }
+    }
+
+    private func capsuleStateForCopy(_ outcome: PolishOutcome) -> CapsuleState {
+        switch outcome {
+        case .ok: return .copied
+        case .skippedNoCredentials: return .warning("已复制原文 · 未润色 ⌘V")
+        case .failed: return .warning("润色失败 · 已复制 ⌘V")
         }
     }
 
