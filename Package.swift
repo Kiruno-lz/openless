@@ -15,6 +15,9 @@ let package = Package(
         .library(name: "OpenLessInsertion", targets: ["OpenLessInsertion"]),
         .library(name: "OpenLessPersistence", targets: ["OpenLessPersistence"]),
     ],
+    dependencies: [
+        .package(url: "https://github.com/sparkle-project/Sparkle", from: "2.9.0"),
+    ],
     targets: [
         .target(name: "OpenLessCore", path: "Sources/OpenLessCore"),
         .target(
@@ -63,6 +66,7 @@ let package = Package(
                 "OpenLessPolish",
                 "OpenLessInsertion",
                 "OpenLessPersistence",
+                .product(name: "Sparkle", package: "Sparkle"),
             ],
             path: "Sources/OpenLessApp"
         ),
