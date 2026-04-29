@@ -1,0 +1,101 @@
+:root {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+  color-scheme: light dark;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: #f5f5f7;
+  color: #1d1d1f;
+}
+
+@media (prefers-color-scheme: dark) {
+  body {
+    background: #1c1c1e;
+    color: #f5f5f7;
+  }
+}
+
+.app-shell {
+  max-width: 880px;
+  margin: 0 auto;
+  padding: 24px 32px 48px;
+}
+
+.app-header h1 {
+  margin: 0 0 8px;
+  font-size: 22px;
+}
+
+.app-header p {
+  margin: 0 0 24px;
+  font-size: 13px;
+  opacity: 0.72;
+}
+
+.spike-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+.spike-grid button {
+  padding: 10px 12px;
+  font-size: 13px;
+  border: 1px solid rgba(0, 0, 0, 0.15);
+  border-radius: 8px;
+  background: #fff;
+  color: inherit;
+  cursor: pointer;
+  text-align: left;
+}
+
+.spike-grid button:hover {
+  background: #efefef;
+}
+
+.spike-grid button:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+@media (prefers-color-scheme: dark) {
+  .spike-grid button {
+    background: #2c2c2e;
+    border-color: rgba(255, 255, 255, 0.12);
+  }
+  .spike-grid button:hover {
+    background: #3a3a3c;
+  }
+}
+
+.spike-log {
+  font-family: ui-monospace, SFMono-Regular, "Menlo", monospace;
+  font-size: 12px;
+  line-height: 1.5;
+  background: #0d0d0f;
+  color: #d4d4d4;
+  padding: 12px 14px;
+  border-radius: 8px;
+  height: 320px;
+  overflow: auto;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.spike-log .row {
+  margin-bottom: 4px;
+}
+
+.spike-log .ok {
+  color: #7ee787;
+}
+
+.spike-log .err {
+  color: #ff7b72;
+}
